@@ -420,7 +420,7 @@ func (cmd *InitCmd) initDevspace(f factory.Factory, configLoader loader.ConfigLo
 				}
 			}
 
-			err = configureManager.AddImage(imageName, image, projectNamespace+"/"+projectName, cmd.Dockerfile)
+			err = configureManager.AddImage(imageName, image, projectNamespace+"/"+projectName, cmd.Dockerfile, client)
 			if err != nil {
 				if err.Error() != "" {
 					cmd.log.Errorf("Error: %s", err.Error())

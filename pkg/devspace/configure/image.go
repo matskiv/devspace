@@ -3,12 +3,13 @@ package configure
 import (
 	"context"
 	"fmt"
-	"github.com/loft-sh/devspace/pkg/util/dockerfile"
-	"mvdan.cc/sh/v3/expand"
 	"os"
 	"path"
 	"regexp"
 	"strings"
+
+	"github.com/loft-sh/devspace/pkg/util/dockerfile"
+	"mvdan.cc/sh/v3/expand"
 
 	"github.com/loft-sh/devspace/pkg/util/encoding"
 	"github.com/loft-sh/loft-util/pkg/command"
@@ -17,6 +18,7 @@ import (
 	"github.com/loft-sh/devspace/pkg/devspace/config/versions/latest"
 	"github.com/loft-sh/devspace/pkg/devspace/docker"
 	"github.com/loft-sh/devspace/pkg/devspace/generator"
+	"github.com/loft-sh/devspace/pkg/devspace/kubectl"
 	"github.com/loft-sh/devspace/pkg/devspace/pullsecrets"
 	"github.com/loft-sh/devspace/pkg/util/survey"
 	"github.com/pkg/errors"
@@ -25,7 +27,7 @@ import (
 const dockerHubHostname = "hub.docker.com"
 
 // AddImage adds an image to the provided config
-func (m *manager) AddImage(imageName, image, projectNamespace, dockerfile string) error {
+func (m *manager) AddImage(imageName, image, projectNamespace, dockerfile string, kubectlClient kubectl.Client) error {
 	var (
 		useDockerHub          = "Use " + dockerHubHostname
 		useGithubRegistry     = "Use GitHub image registry"
@@ -115,14 +117,8 @@ func (m *manager) AddImage(imageName, image, projectNamespace, dockerfile string
 	}
 
 	if image == "" && buildMethod != skip {
-		// Ignore error as context may not be a Space
-		kubeContext, err := m.factory.NewKubeConfigLoader().GetCurrentContext()
-		if err != nil {
-			return err
-		}
-
 		// Get docker client
-		dockerClient, err := m.factory.NewDockerClientWithMinikube(context.TODO(), kubeContext, true, m.log)
+		dockerClient, err := m.factory.NewDockerClientWithMinikube(context.TODO(), &kubectlClient, true, m.log)
 		if err != nil {
 			return errors.Errorf("Cannot create docker client: %v", err)
 		}

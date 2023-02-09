@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/transport/spdy"
 )
 
@@ -47,6 +48,15 @@ var CriticalStatus = map[string]bool{
 var OkayStatus = map[string]bool{
 	"Completed": true,
 	"Running":   true,
+}
+
+// From: https://github.com/kubernetes/minikube/blob/29500c395b21f78d207cb667935d2833c7a37827/pkg/minikube/kubeconfig/extension.go#L29
+// Extension represents information to identify clusters and contexts
+type Extension struct {
+	runtime.TypeMeta `json:",inline"`
+	Version          string `json:"version"`
+	Provider         string `json:"provider"`
+	LastUpdate       string `json:"last-update"`
 }
 
 var privateIPBlocks []*net.IPNet
@@ -204,7 +214,7 @@ func NewPortForwarder(client Client, pod *corev1.Pod, ports []string, addresses 
 
 // IsLocalKubernetes returns true if the context belongs to a local Kubernetes cluster
 func IsLocalKubernetes(context string) bool {
-	if context == minikubeContext ||
+	if context == minikubeContext || //TODO: use IsMinikubeKubernetes
 		strings.HasPrefix(context, "kind-") ||
 		context == dockerDesktopContext ||
 		context == dockerForDesktopContext {
@@ -220,13 +230,27 @@ func IsLocalKubernetes(context string) bool {
 	return false
 }
 
-func IsMinikubeKubernetes(context string) bool {
-	if context == minikubeContext {
+func IsMinikubeKubernetes(c Client) bool {
+	if c.CurrentContext() == minikubeContext {
 		return true
 	}
 
-	if strings.HasPrefix(context, "vcluster_") && strings.HasSuffix(context, minikubeContext) {
+	if strings.HasPrefix(c.CurrentContext(), "vcluster_") && strings.HasSuffix(c.CurrentContext(), minikubeContext) {
 		return true
+	}
+
+	if rawConfig, err := c.ClientConfig().RawConfig(); err == nil {
+		clusters := rawConfig.Clusters[rawConfig.Contexts[rawConfig.CurrentContext].Cluster]
+		for _, extension := range clusters.Extensions {
+			ext, err := runtime.DefaultUnstructuredConverter.ToUnstructured(extension)
+			if err == nil {
+				if provider, ok := ext["provider"].(string); ok {
+					if provider == "minikube.sigs.k8s.io" {
+						return true
+					}
+				}
+			}
+		}
 	}
 
 	return false
